@@ -119,6 +119,96 @@ static func _draw_thorn(c: Node2D) -> void:
 	c.draw_rect(Rect2(0, 0, 26, 8), Color(0.25, 0.1, 0.08))
 
 
+const BRAMBLE_VINE := Color(0.34, 0.18, 0.12)
+const BRAMBLE_VINE_LIGHT := Color(0.56, 0.34, 0.2)
+const BRAMBLE_OUTLINE := Color(0.13, 0.06, 0.05)
+const BRAMBLE_LEAVES := [Color(0.85, 0.36, 0.1), Color(0.7, 0.17, 0.1), Color(0.93, 0.6, 0.15)]
+
+
+static func bramble_rect(w: float, h: float) -> Rect2:
+	return Rect2(-w * 0.5 - 26.0, -h - 24.0, w + 52.0, h + 36.0)
+
+
+## One of three layers (0 back, 1 middle, 2 front) of a tangled thorn bush, w and h in pixel units.
+static func bramble(w: float, h: float, layer: int) -> Texture2D:
+	return texture("bramble%s_%s_%d" % [w, h, layer], bramble_rect(w, h), _paint.bind(_draw_bramble.bind(w, h, layer)))
+
+
+static func _draw_bramble(c: Node2D, w: float, h: float, layer: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 977 * layer + 13
+	var half := w * 0.5
+	if layer == 0:
+		var core := PackedVector2Array()
+		var y := 6.0
+		while y > -h * 0.94:
+			core.append(Vector2(-half * 0.78 + sin(y * 0.05) * 7.0 + rng.randf_range(-6.0, 6.0), y))
+			y -= 18.0
+		y = -h * 0.94
+		while y < 6.0:
+			core.append(Vector2(half * 0.78 + sin(y * 0.06) * 7.0 + rng.randf_range(-6.0, 6.0), y))
+			y += 18.0
+		c.draw_colored_polygon(core, Color(0.15, 0.07, 0.07))
+	var vines: int = [24, 17, 12][layer]
+	for i in vines:
+		var x0 := rng.randf_range(-half, half)
+		var x1 := clampf(x0 + rng.randf_range(-half * 0.9, half * 0.9), -half - 12.0, half + 12.0)
+		var top := -h * (rng.randf_range(0.8, 1.0) if layer == 0 else rng.randf_range(0.5, 1.0))
+		var amp := rng.randf_range(12.0, 32.0)
+		var freq := rng.randf_range(1.5, 3.5)
+		var phase := rng.randf_range(0.0, TAU)
+		var thick := rng.randf_range(4.5, 8.0)
+		var steps := int(absf(top) / 9.0) + 2
+		var pts := PackedVector2Array()
+		for s in steps + 1:
+			var t := float(s) / float(steps)
+			var px := lerpf(x0, x1, t) + sin(t * freq * TAU + phase) * amp
+			pts.append(Vector2(clampf(px, -half - 14.0, half + 14.0), lerpf(4.0, top, t)))
+		c.draw_polyline(pts, BRAMBLE_OUTLINE, thick + 3.0, true)
+		c.draw_polyline(pts, BRAMBLE_VINE, thick, true)
+		var lit := PackedVector2Array()
+		for p in pts:
+			lit.append(p + Vector2(-thick * 0.18, -thick * 0.1))
+		c.draw_polyline(lit, BRAMBLE_VINE_LIGHT, thick * 0.35, true)
+		var side := 1.0 if rng.randf() < 0.5 else -1.0
+		var gap := 0.0
+		for s in range(1, pts.size()):
+			var tangent := (pts[s] - pts[s - 1]).normalized()
+			gap -= pts[s].distance_to(pts[s - 1])
+			if gap > 0.0:
+				continue
+			gap = rng.randf_range(20.0, 30.0)
+			var dir := (tangent.rotated(side * PI * 0.5) + tangent * 0.7).normalized()
+			_bramble_thorn(c, pts[s], dir, rng.randf_range(11.0, 19.0), rng.randf_range(3.5, 5.0))
+			side = -side
+			if rng.randf() < 0.18:
+				_bramble_leaf(c, pts[s], dir.rotated(rng.randf_range(-0.5, 0.5)), rng.randf_range(10.0, 15.0), BRAMBLE_LEAVES[rng.randi() % BRAMBLE_LEAVES.size()])
+		var last := pts.size() - 1
+		_bramble_thorn(c, pts[last], (pts[last] - pts[last - 1]).normalized(), rng.randf_range(12.0, 18.0), 4.5)
+
+
+static func _bramble_thorn(c: Node2D, base: Vector2, dir: Vector2, length: float, width: float) -> void:
+	var side := dir.rotated(PI * 0.5)
+	var tip := base + dir * length
+	c.draw_colored_polygon(PackedVector2Array([base - side * (width + 1.5), tip + dir * 1.8, base + side * (width + 1.5)]), BRAMBLE_OUTLINE)
+	c.draw_colored_polygon(PackedVector2Array([base - side * width, tip, base + side * width]), Color(0.6, 0.15, 0.12))
+	var mid := base + dir * length * 0.55
+	c.draw_colored_polygon(PackedVector2Array([mid - side * width * 0.45, tip, mid + side * width * 0.45]), Color(0.95, 0.5, 0.3))
+
+
+static func _bramble_leaf(c: Node2D, base: Vector2, dir: Vector2, length: float, color: Color) -> void:
+	var side := dir.rotated(PI * 0.5)
+	var pts := PackedVector2Array()
+	for i in 9:
+		var t := float(i) / 8.0
+		pts.append(base + dir * length * t + side * sin(t * PI) * length * 0.32)
+	for i in range(8, -1, -1):
+		var t := float(i) / 8.0
+		pts.append(base + dir * length * t - side * sin(t * PI) * length * 0.32)
+	c.draw_colored_polygon(pts, color)
+	c.draw_line(base, base + dir * length * 0.9, color.darkened(0.45), 1.3)
+
+
 static func boulder(radius: float) -> Texture2D:
 	return texture("boulder%s" % radius, BOULDER_RECT, _paint.bind(_draw_boulder.bind(radius * 100.0)))
 

@@ -174,7 +174,7 @@ class Shroom extends Area3D:
 		if master:
 			hog.launch_to(landing_position, launch_apex_y, drift_start_y)
 		else:
-			hog.bounce_up(bounce_height)
+			hog.bounce_up(bounce_height, hog.bounce_bonus())
 		bounced_player.emit()
 		_spores.restart()
 		_spores.emitting = true
@@ -311,6 +311,9 @@ class Zone extends Area3D:
 		collision.shape = shape
 		add_child(collision)
 
+	func rearm() -> void:
+		_done = false
+
 	func _physics_process(_delta: float) -> void:
 		if _done:
 			return
@@ -431,8 +434,83 @@ class Pendulum extends Node3D:
 		joint.node_b = joint.get_path_to(swinger)
 
 
+## A tall wall of thorns. A plush hedgehog that touches it is knocked out; a spike ball rolls
+## straight through.
+class Bramble extends Area3D:
+	var width := 1.2
+	var height := 5.0
+
+	func _ready() -> void:
+		collision_layer = 0
+		collision_mask = 2
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(width, height, 1.4)
+		var collision := CollisionShape3D.new()
+		collision.shape = shape
+		collision.position = Vector3(0.0, height * 0.5, 0.0)
+		add_child(collision)
+		# three painted layers of tangled vines at different depths, the front one swaying a little
+		var shades := [0.6, 0.85, 1.0]
+		var depths := [-0.35, 0.0, 0.35]
+		for layer in 3:
+			var art := Art2D.sprite(Art2D.bramble(width * 100.0, height * 100.0, layer), Art2D.bramble_rect(width * 100.0, height * 100.0), 1.0, true)
+			art.position = Vector3(0.0, 0.0, depths[layer])
+			art.modulate = Color(shades[layer], shades[layer], shades[layer])
+			add_child(art)
+			if layer > 0:
+				var sway := create_tween().set_loops()
+				var angle := 0.012 * float(layer)
+				art.rotation.z = -angle
+				sway.tween_property(art, "rotation:z", angle, 1.6 + 0.4 * layer).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				sway.tween_property(art, "rotation:z", -angle, 1.6 + 0.4 * layer).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	func _physics_process(_delta: float) -> void:
+		for body in get_overlapping_bodies():
+			var hog := body as Hog3D
+			if hog == null or hog.ko or hog.curled:
+				continue
+			hog.knock_out(global_position)
+
+
 class Boulder extends RigidBody3D:
+	const CRUSH_CLOSING := 4.5
+	const MIN_SPEED := 2.5
+
 	var radius := 0.45
+	var _cooldown := 0.0
+
+	# A boulder only hurts when it actually slams into the hedgehog (closing speed, not touch).
+	# Plush: crushed. Spike ball: bounces off it, hard. Measured on positions because Jolt reports
+	# contacts a couple of frames late.
+	func _physics_process(delta: float) -> void:
+		_cooldown = maxf(_cooldown - delta, 0.0)
+		if freeze or _cooldown > 0.0 or linear_velocity.length() < MIN_SPEED:
+			return
+		for node in get_tree().get_nodes_in_group("hog"):
+			var hog := node as Hog3D
+			if hog == null or hog.ko:
+				continue
+			var to := hog.global_position - global_position
+			to.z = 0.0
+			if to.length() > radius + Hog3D.RADIUS + 0.12:
+				continue
+			var closing := (linear_velocity - hog.linear_velocity).dot(to.normalized())
+			if closing < CRUSH_CLOSING:
+				continue
+			_cooldown = 0.5
+			if hog.curled:
+				# they pass through each other for a moment so the rebound is not eaten by the overlap
+				hog.add_collision_exception_with(self)
+				get_tree().create_timer(0.4).timeout.connect(_restore_collision.bind(hog))
+				var away := signf(to.x) if absf(to.x) > 0.02 else 1.0
+				hog.shove_back(global_position, closing)
+				apply_central_impulse(Vector3(-away * closing * 0.9, 0.0, 0.0))
+			else:
+				hog.knock_out(global_position)
+
+	func _restore_collision(hog: Hog3D) -> void:
+		if is_instance_valid(hog):
+			hog.remove_collision_exception_with(self)
 
 	func _ready() -> void:
 		collision_layer = 4

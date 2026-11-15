@@ -1,16 +1,21 @@
 class_name Game3D
 extends Node3D
 
-enum State { TITLE, PLAYING, WON }
+enum State { TITLE, INTRO, PLAYING, WON }
 
 # Level data is kept in the old 2D pixel units (y down) and converted with S / flip at build time.
 const S := 0.01
 const CAVE := 1100.0
 const BOTTOM := 2400.0
+## Every level starts on the cave floor, right where the hedgehog lands after Terry drops him down the hole (m).
+const START_X := 0.9
 const TRUNK := Color(0.36, 0.21, 0.11)
 const TOWER := [[150.0, -40.0], [400.0, -170.0], [650.0, -300.0], [900.0, -430.0]]
 const SUMMIT := -470.0
+const CHASM_REL := [[200.0, 40.0], [520.0, -60.0], [840.0, 40.0], [1160.0, -100.0], [1480.0, 40.0]]
 const CHASM := [[7800.0, 40.0], [8120.0, -60.0], [8440.0, 40.0], [8760.0, -100.0], [9080.0, 40.0]]
+const TOWER_X0 := {1: 3000.0, 2: 11450.0, 3: 7750.0, 4: 7750.0, 5: 10850.0}
+const LEVELS := 5
 const IDLE_PLAYING := 60.0
 const IDLE_WON := 40.0
 const NAME_CHARS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
@@ -25,6 +30,8 @@ var best_combo := 0
 var tower_x0 := 3000.0
 var world_end := 5900.0
 var hole_b := Vector2(3250.0, 4650.0)
+## [from_x, to_x] in px of every stretch that has to be crossed by chaining mushroom bounces (the route test reads it)
+var bounce_zones: Array = []
 var hog: Hog3D
 var camera: Cam3D
 var hud: ToyHud
@@ -44,15 +51,17 @@ var _rec := PackedFloat32Array()
 var _frame := 0
 var _prev_best := 0.0
 var _hit_stopping := false
+var _showers: Array = []
 
 
 func _ready() -> void:
 	Engine.time_scale = 1.0
 	Art2D.reset(self)
 	ToyScores.prefix = "toy3d"
+	ToyLevels.count = LEVELS
 	ToyScores.level = level
 	ToyHud.title_text = "HedgeHog Bounce! 3D"
-	tower_x0 = 3000.0 if level == 1 else 11450.0
+	tower_x0 = TOWER_X0[level]
 	world_end = tower_x0 + 2900.0
 	hole_b = Vector2(tower_x0 + 250.0, tower_x0 + 1650.0)
 	_build_environment()
@@ -85,6 +94,35 @@ func start_run() -> void:
 	audio.play("start")
 
 
+## Level 1 opens with the cutscene when it is started from the title; retries (R, PLAY AGAIN) skip it.
+func _begin_from_title() -> void:
+	if level == 1:
+		play_intro()
+	else:
+		start_run()
+
+
+func play_intro() -> void:
+	if state != State.TITLE:
+		return
+	state = State.INTRO
+	hud.hide_title(false)
+	hog.hide()
+	var intro := Intro3D.new()
+	intro.name = "Intro"
+	intro.camera = camera
+	intro.audio = audio
+	intro.done.connect(_on_intro_done)
+	add_child(intro)
+
+
+func _on_intro_done() -> void:
+	hog.show()
+	camera.snap()
+	state = State.TITLE
+	start_run()
+
+
 func _physics_process(delta: float) -> void:
 	if state != State.PLAYING:
 		return
@@ -98,8 +136,6 @@ func _physics_process(delta: float) -> void:
 		_ghost.show_at(_frame)
 	if hog.grounded:
 		_ground_time += delta
-		if _ground_time > 0.45:
-			combo = 0
 	else:
 		_ground_time = 0.0
 
@@ -140,11 +176,11 @@ func _input(event: InputEvent) -> void:
 		return
 	match state:
 		State.TITLE:
-			if key and (key.keycode == KEY_1 or key.keycode == KEY_2):
-				_on_level_pressed(1 if key.keycode == KEY_1 else 2)
+			if key and key.keycode >= KEY_1 and key.keycode < KEY_1 + LEVELS:
+				_on_level_pressed(key.keycode - KEY_1 + 1)
 			elif event is InputEventKey or event is InputEventJoypadButton or event is InputEventMouseButton:
 				if not (key and key.keycode == KEY_ESCAPE):
-					start_run()
+					_begin_from_title()
 		State.PLAYING:
 			if event.is_action_pressed("restart"):
 				_restart(true)
@@ -155,7 +191,7 @@ func _input(event: InputEvent) -> void:
 				if key and key.keycode == KEY_ESCAPE:
 					_restart(false)
 				elif key and key.keycode == KEY_N:
-					_on_level_pressed(3 - level)
+					_on_level_pressed(ToyLevels.next_of(level))
 				elif event.is_action_pressed("restart") or event.is_action_pressed("ui_accept") or event.is_action_pressed("jump"):
 					_restart(true)
 
@@ -334,10 +370,12 @@ func _build_terrain() -> void:
 	_poly("ForestAbove", [Vector2(420, 0), Vector2(hole_b.x, 0), Vector2(hole_b.x, 130), Vector2(420, 130)])
 	_poly("ForestHome", [Vector2(hole_b.y, 0), Vector2(world_end, 0), Vector2(world_end, 130), Vector2(hole_b.y, 130)])
 	_poly("BigTree", [Vector2(420, -1500), Vector2(560, -1500), Vector2(560, 130), Vector2(420, 130)], false, TRUNK, true)
-	if level == 1:
-		_terrain_level_1()
-	else:
-		_terrain_level_2()
+	match level:
+		1: _terrain_level_1()
+		2: _terrain_level_2()
+		3: _terrain_level_3()
+		4: _terrain_level_4()
+		5: _terrain_level_5()
 	var x0 := tower_x0
 	_poly("CaveMid", [Vector2(x0 - 350, c + 40), Vector2(x0, c + 40), Vector2(x0, BOTTOM), Vector2(x0 - 350, BOTTOM)])
 	_poly("TowerFloor", [Vector2(x0, c + 780), Vector2(world_end, c + 780), Vector2(world_end, BOTTOM), Vector2(x0, BOTTOM)], false)
@@ -373,6 +411,87 @@ func _terrain_level_2() -> void:
 	_pit_floor("PitD", 9900, 10300)
 	_ground("G5", [Vector2(10300, c + 40), Vector2(10700, c + 40)])
 	_pit_floor("PitE", 10700, 11100)
+
+
+## A 1700 px wide chasm starting at x: five bounce islands over a thorn floor (same shape as Level 2's).
+func _chasm_terrain(x: float) -> void:
+	_poly("ChasmFloor", [Vector2(x, CAVE + 780), Vector2(x + 1700, CAVE + 780), Vector2(x + 1700, BOTTOM), Vector2(x, BOTTOM)], false)
+	for island in CHASM_REL:
+		_pillar(x + float(island[0]), float(island[1]))
+
+
+func _chasm_gadgets(x: float) -> void:
+	for i in CHASM_REL.size():
+		var island: Array = CHASM_REL[i]
+		_mushroom(Vector2(x + float(island[0]), CAVE + float(island[1])), 110.0, 420.0, i == 2)
+	_thorns(x + 850.0, CAVE + 780.0, 1700.0)
+	bounce_zones.append([x - 100.0, x + 1800.0])
+
+
+## A 500 px thorn pit with one bounce pillar in the middle.
+func _pillar_pit(x: float) -> void:
+	_pit_floor("PillarPit%d" % int(x), x, x + 500.0)
+	_pillar(x + 250.0, 40.0)
+
+
+func _pillar_pit_gadgets(x: float) -> void:
+	_mushroom(Vector2(x + 250.0, CAVE + 40.0), 110.0, 420.0)
+	_thorns(x + 250.0, CAVE + 720.0, 500.0)
+	bounce_zones.append([x - 100.0, x + 600.0])
+
+
+## A 400 px thorn pit crossed on a seesaw, optionally with a swinging chestnut above it.
+func _seesaw_pit(x: float, pendulum_angle := 0.0) -> void:
+	_pit_floor("SeesawPit%d" % int(x), x, x + 400.0)
+	_seesaw(x + 200.0, pendulum_angle)
+	_thorns(x + 200.0, CAVE + 720.0, 400.0)
+
+
+## A hill with a boulder shower over its far side; the checkpoint sits on the top.
+func _shower_gadgets(top_x: float, top_y: float, count: int, spacing: float) -> void:
+	_mushroom(Vector2(top_x + 20.0, top_y), 96.0, 420.0, true)
+	var xs := []
+	for i in count:
+		xs.append(top_x + 240.0 + spacing * i)
+	_boulder_shower(xs, Vector2(top_x + 100.0, top_y - 140.0))
+
+
+func _terrain_level_3() -> void:
+	var c := CAVE
+	_ground("G0", [Vector2(-600, c), Vector2(800, c), Vector2(1250, c - 240), Vector2(1450, c - 240), Vector2(1950, c + 40),
+		Vector2(2800, c + 40), Vector2(3300, c - 230), Vector2(3500, c - 230), Vector2(4000, c + 40), Vector2(4600, c + 40)])
+	_ground("G1", [Vector2(5000, c + 40), Vector2(5400, c + 40), Vector2(5900, c - 260), Vector2(6100, c - 260),
+		Vector2(6600, c + 40), Vector2(7000, c + 40)])
+	_pit_floor("PitA", 4600, 5000)
+	_pit_floor("PitB", 7000, 7400)
+
+
+func _terrain_level_4() -> void:
+	var c := CAVE
+	_ground("G0", [Vector2(-600, c), Vector2(800, c), Vector2(1100, c - 130), Vector2(1350, c - 130), Vector2(1700, c + 40), Vector2(2300, c + 40)])
+	_ground("G1", [Vector2(2700, c + 40), Vector2(3100, c + 40)])
+	_ground("G2", [Vector2(3500, c + 40), Vector2(3900, c + 40)])
+	_ground("G3", [Vector2(4300, c + 40), Vector2(4800, c + 40)])
+	_ground("G4", [Vector2(6500, c + 40), Vector2(7000, c + 40)])
+	_chasm_terrain(4800)
+	for x in [2300.0, 3100.0, 3900.0, 7000.0]:
+		_pit_floor("Pit%d" % int(x), x, x + 400.0)
+
+
+func _terrain_level_5() -> void:
+	var c := CAVE
+	_ground("G0", [Vector2(-600, c), Vector2(800, c), Vector2(1100, c - 130), Vector2(1350, c - 130), Vector2(1700, c + 30),
+		Vector2(2000, c + 30), Vector2(2250, c - 100), Vector2(2450, c - 100), Vector2(2800, c + 40), Vector2(3000, c + 40)])
+	_pillar_pit(3000)
+	_ground("G1", [Vector2(3500, c + 40), Vector2(4300, c + 40), Vector2(4800, c - 250), Vector2(5000, c - 250),
+		Vector2(5500, c + 40), Vector2(6100, c + 40)])
+	_chasm_terrain(6100)
+	_ground("G2", [Vector2(7800, c + 40), Vector2(8400, c + 40)])
+	_pillar_pit(8400)
+	_ground("G3", [Vector2(8900, c + 40), Vector2(9300, c + 40)])
+	_ground("G4", [Vector2(9700, c + 40), Vector2(10100, c + 40)])
+	_pit_floor("PitC", 9300, 9700)
+	_pit_floor("PitD", 10100, 10500)
 
 
 func _at(x: float, y: float) -> Vector3:
@@ -423,27 +542,49 @@ func _thorns(x: float, y: float, width: float, spikes := true) -> void:
 
 
 func _boulder_shower(xs: Array, trigger: Vector2) -> void:
-	for x in xs:
+	var shower := {"xs": xs, "trigger": trigger, "boulders": []}
+	var zone := Gadgets3D.Zone.new()
+	zone.position = _at(trigger.x, trigger.y)
+	zone.size = Vector3(0.6, 3.0, 2.0)
+	zone.fired.connect(_release_boulders.bind(shower))
+	add_child(zone)
+	shower["zone"] = zone
+	_showers.append(shower)
+	_load_shower(shower)
+
+
+func _load_shower(shower: Dictionary) -> void:
+	for old in shower["boulders"]:
+		if is_instance_valid(old):
+			old.queue_free()
+	var fresh := []
+	for x in shower["xs"]:
 		var boulder := Gadgets3D.Boulder.new()
 		boulder.position = _at(float(x), CAVE - 900.0)
 		boulder.freeze = true
-		boulder.add_to_group("boulders")
 		add_child(boulder)
-	var shower := Gadgets3D.Zone.new()
-	shower.position = _at(trigger.x, trigger.y)
-	shower.size = Vector3(0.6, 3.0, 2.0)
-	shower.fired.connect(_release_boulders)
-	add_child(shower)
+		fresh.append(boulder)
+	shower["boulders"] = fresh
+	(shower["zone"] as Gadgets3D.Zone).rearm()
+
+
+func _bramble(x: float, y: float, width := 120.0) -> void:
+	var bramble := Gadgets3D.Bramble.new()
+	bramble.position = _at(x, y)
+	bramble.width = width * S
+	add_child(bramble)
 
 
 func _build_gadgets() -> void:
 	var c := CAVE
 	var x0 := tower_x0
 	_mushroom(Vector2(360, c), 180.0, 380.0, true)
-	if level == 1:
-		_gadgets_level_1()
-	else:
-		_gadgets_level_2()
+	match level:
+		1: _gadgets_level_1()
+		2: _gadgets_level_2()
+		3: _gadgets_level_3()
+		4: _gadgets_level_4()
+		5: _gadgets_level_5()
 	_mushroom(Vector2(x0 - 220, c + 40), 96.0, 420.0, true)
 	for i in TOWER.size():
 		var p: Array = TOWER[i]
@@ -467,9 +608,12 @@ func _build_gadgets() -> void:
 
 func _gadgets_level_1() -> void:
 	var c := CAVE
-	_beetles([[740.0, c, 50.0], [2100.0, c + 40.0, 100.0], [2830.0, c + 40.0, 60.0]])
+	_beetles([[740.0, c, 50.0], [2910.0, c + 40.0, 40.0]])
 	_seesaw(2450, 0.8)
-	_boulder_shower([1560.0, 1680.0, 1800.0, 1920.0], Vector2(1400, c - 380))
+	_mushroom(Vector2(1320, c - 240), 96.0, 420.0, true)
+	_boulder_shower([1540.0, 1620.0, 1700.0, 1780.0, 1860.0, 1940.0], Vector2(1400, c - 380))
+	_mushroom(Vector2(2010, c + 40), 96.0, 420.0, true)
+	_bramble(2150.0, c + 40.0)
 	_thorns(2450.0, c + 720.0, 400.0)
 
 
@@ -481,39 +625,109 @@ func _gadgets_level_2() -> void:
 		[10500.0, c + 40.0, 100.0], [11350.0, c + 40.0, 40.0]])
 	_mushroom(Vector2(3250, c + 40), 110.0, 420.0)
 	_thorns(3250.0, c + 720.0, 500.0)
+	bounce_zones.append([2900.0, 3600.0])
 	_mushroom(Vector2(3650, c + 40), 96.0, 420.0, true)
 	_seesaw(4000)
 	_thorns(4000.0, c + 720.0, 400.0)
 	_seesaw(4800, 0.8)
 	_thorns(4800.0, c + 720.0, 400.0)
 	_mushroom(Vector2(5150, c + 40), 96.0, 420.0, true)
-	_boulder_shower([6400.0, 6520.0, 6640.0, 6760.0, 6880.0, 7000.0], Vector2(6150, c - 440))
+	_mushroom(Vector2(6060, c - 300), 96.0, 420.0, true)
+	_boulder_shower([6380.0, 6470.0, 6560.0, 6650.0, 6740.0, 6830.0, 6920.0, 7010.0], Vector2(6150, c - 440))
+	_bramble(7170.0, c + 40.0)
 	_mushroom(Vector2(7500, c + 40), 96.0, 420.0, true)
 	for i in CHASM.size():
 		var island: Array = CHASM[i]
 		_mushroom(Vector2(float(island[0]), c + float(island[1])), 110.0, 420.0, i == 2)
 	_thorns(8450.0, c + 780.0, 1700.0)
+	bounce_zones.append([7550.0, 9350.0])
 	_mushroom(Vector2(9400, c + 40), 96.0, 420.0, true)
+	_bramble(9750.0, c + 40.0)
 	_seesaw(10100, 0.8)
 	_thorns(10100.0, c + 720.0, 400.0)
 	_mushroom(Vector2(10600, c + 40), 96.0, 420.0, true)
+	_bramble(10400.0, c + 40.0)
 	_seesaw(10900, -0.8)
 	_thorns(10900.0, c + 720.0, 400.0)
 
 
-func _release_boulders() -> void:
-	var boulders := get_tree().get_nodes_in_group("boulders")
-	for boulder: Gadgets3D.Boulder in boulders:
+func _gadgets_level_3() -> void:
+	var c := CAVE
+	_beetles([[2350.0, c + 40.0, 60.0], [4300.0, c + 40.0, 60.0]])
+	_shower_gadgets(1300.0, c - 240.0, 6, 80.0)
+	_mushroom(Vector2(2010, c + 40), 96.0, 420.0, true)
+	_bramble(2150.0, c + 40.0)
+	_mushroom(Vector2(2500, c + 40), 96.0, 420.0, true)
+	_bramble(2650.0, c + 40.0)
+	_shower_gadgets(3300.0, c - 230.0, 6, 80.0)
+	_mushroom(Vector2(4500, c + 40), 96.0, 420.0, true)
+	_seesaw_pit(4600, 0.8)
+	_mushroom(Vector2(5150, c + 40), 96.0, 420.0, true)
+	_shower_gadgets(5900.0, c - 260.0, 7, 70.0)
+	_bramble(6800.0, c + 40.0)
+	_mushroom(Vector2(6900, c + 40), 96.0, 420.0, true)
+	_seesaw_pit(7000, -0.8)
+
+
+func _gadgets_level_4() -> void:
+	var c := CAVE
+	_beetles([[1230.0, c - 130.0, 60.0], [1950.0, c + 40.0, 100.0], [3700.0, c + 40.0, 80.0], [4600.0, c + 40.0, 60.0]])
+	_seesaw_pit(2300, 0.8)
+	_mushroom(Vector2(2900, c + 40), 96.0, 420.0, true)
+	_seesaw_pit(3100, -0.8)
+	_seesaw_pit(3900, 0.8)
+	_mushroom(Vector2(4400, c + 40), 96.0, 420.0, true)
+	_chasm_gadgets(4800)
+	_mushroom(Vector2(6600, c + 40), 96.0, 420.0, true)
+	_bramble(6800.0, c + 40.0)
+	_seesaw_pit(7000, -0.8)
+
+
+func _gadgets_level_5() -> void:
+	var c := CAVE
+	_beetles([
+		[1230.0, c - 130.0, 60.0], [1850.0, c + 30.0, 90.0], [2350.0, c - 100.0, 50.0],
+		[4150.0, c + 40.0, 60.0], [8150.0, c + 40.0, 100.0]])
+	_pillar_pit_gadgets(3000)
+	_mushroom(Vector2(3650, c + 40), 96.0, 420.0, true)
+	_bramble(3950.0, c + 40.0)
+	_shower_gadgets(4800.0, c - 250.0, 7, 70.0)
+	_bramble(5800.0, c + 40.0)
+	_mushroom(Vector2(5950, c + 40), 96.0, 420.0, true)
+	_chasm_gadgets(6100)
+	_mushroom(Vector2(7900, c + 40), 96.0, 420.0, true)
+	_pillar_pit_gadgets(8400)
+	_mushroom(Vector2(9050, c + 40), 96.0, 420.0, true)
+	_seesaw_pit(9300, 0.8)
+	_mushroom(Vector2(9800, c + 40), 96.0, 420.0, true)
+	_bramble(9950.0, c + 40.0)
+	_seesaw_pit(10100, -0.8)
+
+
+## The boulders come down one after another, so there is no standing in the gap between them.
+func _release_boulders(shower: Dictionary) -> void:
+	var boulders: Array = shower["boulders"].duplicate()
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			return
 		boulder.freeze = false
+		await get_tree().create_timer(0.3).timeout
 	await get_tree().create_timer(8.0).timeout
 	for boulder in boulders:
 		if is_instance_valid(boulder):
 			boulder.queue_free()
 
 
+## Dying on the way to a boulder shower sets it up again, so it has to be beaten, not skipped.
+func _on_hog_respawned() -> void:
+	for shower in _showers:
+		if hog.respawn_point.x < ((shower["trigger"] as Vector2).x - 20.0) * S:
+			_load_shower(shower)
+
+
 func _build_hog() -> void:
 	hog = Hog3D.new()
-	hog.position = Vector3(-2.6, Hog3D.RADIUS + 0.04, 0.0)
+	hog.position = Vector3(START_X, -CAVE * S + Hog3D.RADIUS + 0.04, 0.0)
 	hog.active = false
 	add_child(hog)
 	camera = Cam3D.new()
@@ -540,6 +754,8 @@ func _build_hog() -> void:
 	hog.jumped.connect(func() -> void: audio.play("jump"))
 	hog.curl_changed.connect(func(on: bool) -> void: audio.play("curl" if on else "uncurl"))
 	hog.respawned.connect(func() -> void: audio.play("bounce", 1.2, -4.0))
+	hog.respawned.connect(_on_hog_respawned)
+	hog.chain_changed.connect(_on_chain_changed)
 	hog.big_hit.connect(func(strength: float) -> void: audio.play("land", 1.0, strength * 4.0 - 4.0))
 
 
@@ -563,11 +779,25 @@ func _build_audio() -> void:
 # ---------------------------------------------------------------- events
 
 func _on_bounced() -> void:
-	combo += 1
-	best_combo = maxi(best_combo, combo)
 	_ground_time = 0.0
-	camera.shake(0.2)
+	camera.shake(0.2 + 0.05 * minf(hog.chain, 6))
 	audio.play("bounce", 1.0 + 0.07 * minf(combo - 1, 8))
+	_bounce_burst()
+
+
+func _on_chain_changed(count: int) -> void:
+	combo = count
+	best_combo = maxi(best_combo, combo)
+	hud.set_chain(count)
+
+
+## A ring of leaves kicked up at the hedgehog's feet on every bounce; bigger down a long chain.
+func _bounce_burst() -> void:
+	var leaves := Models3D.burst(8 + 3 * mini(hog.chain, 6), 0.7, 0.13, Color(0.98, 0.62, 0.2, 0.9), 1.5, 3.5 + 0.4 * mini(hog.chain, 6), 75.0, -6.0)
+	leaves.position = hog.global_position + Vector3(0.0, -Hog3D.RADIUS * 0.6, 0.4)
+	leaves.finished.connect(leaves.queue_free)
+	add_child(leaves)
+	leaves.emitting = true
 
 
 func _on_launched() -> void:
@@ -586,7 +816,6 @@ func _ko_stars() -> void:
 
 func _on_knocked_out() -> void:
 	_ko_stars()
-	combo = 0
 	camera.shake(0.6)
 	audio.play("hurt")
 	audio.play("die", 1.2, -6.0)

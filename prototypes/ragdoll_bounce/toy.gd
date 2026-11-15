@@ -50,6 +50,7 @@ var _hit_stopping := false
 
 func _ready() -> void:
 	Engine.time_scale = 1.0
+	ToyLevels.count = 2
 	ToyScores.level = level
 	tower_x0 = 3000.0 if level == 1 else 11450.0
 	world_end = tower_x0 + 2900.0
@@ -162,7 +163,7 @@ func _input(event: InputEvent) -> void:
 				if key and key.keycode == KEY_ESCAPE:
 					_restart(false)
 				elif key and key.keycode == KEY_N:
-					_on_level_pressed(3 - level)
+					_on_level_pressed(ToyLevels.next_of(level))
 				elif event.is_action_pressed("restart") or event.is_action_pressed("ui_accept") or event.is_action_pressed("jump"):
 					_restart(true)
 

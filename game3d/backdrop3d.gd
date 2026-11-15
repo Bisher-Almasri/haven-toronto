@@ -12,6 +12,31 @@ const THEME_2 := [
 	[0.84, Color(0.38, 0.22, 0.12), Color(0.12, 0.06, 0.04)],
 	[1.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
 ]
+const THEME_3 := [
+	[0.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+	[0.3, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+	[0.5, Color(0.3, 0.32, 0.14), Color(0.07, 0.1, 0.04)],
+	[0.75, Color(0.3, 0.32, 0.14), Color(0.07, 0.1, 0.04)],
+	[0.9, Color(0.4, 0.24, 0.12), Color(0.12, 0.06, 0.04)],
+	[1.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+]
+const THEME_4 := [
+	[0.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+	[0.2, Color(0.34, 0.26, 0.3), Color(0.09, 0.06, 0.1)],
+	[0.4, Color(0.22, 0.3, 0.42), Color(0.04, 0.08, 0.15)],
+	[0.7, Color(0.22, 0.3, 0.42), Color(0.04, 0.08, 0.15)],
+	[0.88, Color(0.38, 0.24, 0.16), Color(0.12, 0.06, 0.05)],
+	[1.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+]
+const THEME_5 := [
+	[0.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+	[0.2, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+	[0.4, Color(0.5, 0.2, 0.12), Color(0.16, 0.04, 0.04)],
+	[0.55, Color(0.38, 0.2, 0.3), Color(0.1, 0.04, 0.12)],
+	[0.7, Color(0.2, 0.3, 0.34), Color(0.04, 0.09, 0.11)],
+	[0.85, Color(0.52, 0.2, 0.1), Color(0.17, 0.04, 0.03)],
+	[1.0, Color(0.46, 0.27, 0.13), Color(0.13, 0.07, 0.05)],
+]
 
 var level := 1
 var world_end := 59.0
@@ -205,11 +230,12 @@ func _falling_leaves() -> void:
 
 
 func _palette(t: float) -> Array:
-	if level != 2:
+	var theme: Array = [[], THEME_2, THEME_3, THEME_4, THEME_5][clampi(level, 1, 5) - 1]
+	if theme.is_empty():
 		return WARM
-	for i in THEME_2.size() - 1:
-		var a: Array = THEME_2[i]
-		var b: Array = THEME_2[i + 1]
+	for i in theme.size() - 1:
+		var a: Array = theme[i]
+		var b: Array = theme[i + 1]
 		if t <= float(b[0]):
 			var k := inverse_lerp(float(a[0]), float(b[0]), t)
 			return [(a[1] as Color).lerp(b[1], k), (a[2] as Color).lerp(b[2], k)]

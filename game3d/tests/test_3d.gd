@@ -47,20 +47,15 @@ func _initialize() -> void:
 
 
 func run() -> void:
-	check(hog.grounded, "hog settles and is grounded on the forest start (pos %s)" % hog.global_position)
-	check(absf(hog.global_position.y - Hog3D.RADIUS) < 0.05, "resting height matches the sphere radius (y=%.3f)" % hog.global_position.y)
+	check(hog.grounded, "hog settles and is grounded on the cave floor start (pos %s)" % hog.global_position)
+	check(absf(hog.global_position.y - (CAVE + Hog3D.RADIUS)) < 0.05, "resting height matches the sphere radius (y=%.3f)" % hog.global_position.y)
 	check(absf(hog.global_position.z) < 0.001, "hog stays on the z = 0 plane (z=%.4f)" % hog.global_position.z)
+	check(absf(hog.respawn_point.y - hog.global_position.y) < 0.1, "the respawn point is the cave start (%s)" % hog.respawn_point)
 
 	hold("move_right", true)
-	var caught := false
-	for i in 900:
-		await physics_frame
-		if hog.bounce_count > 0:
-			caught = true
-			break
+	await frames(60)
 	hold("move_right", false)
-	check(caught, "walks off the forest ledge and is caught by the cave mushroom (pos %s)" % hog.global_position)
-	check(not hog.ko, "survives the long fall (no KO)")
+	check(hog.global_position.x > 2.5 and hog.grounded and not hog.ko, "runs right along the cave floor (pos %s)" % hog.global_position)
 	hold("move_left", true)
 	await frames(200)
 	hold("move_left", false)
@@ -146,5 +141,5 @@ func run() -> void:
 
 	# the beetle patrolling at x = 7.4
 	var bugs := level.find_children("*", "Area3D", true, false).filter(func(n: Node) -> bool: return n is Gadgets3D.Bug)
-	check(bugs.size() == 3, "level 1 has 3 beetles (got %d)" % bugs.size())
+	check(bugs.size() == 2, "level 1 has 2 beetles (got %d)" % bugs.size())
 	print("---- done")

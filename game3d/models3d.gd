@@ -102,10 +102,30 @@ static func spikes(dirs: Array, base: float, length: float, radius_at: float, ma
 
 
 ## Little billboard squares for CPUParticles3D.
+static var _soft_dot: GradientTexture2D
+
+
+## Round, softly feathered dot (a plain quad would show up as a hard square).
+static func soft_dot_texture() -> GradientTexture2D:
+	if _soft_dot == null:
+		var gradient := Gradient.new()
+		gradient.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+		gradient.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.85), Color(1, 1, 1, 0)])
+		_soft_dot = GradientTexture2D.new()
+		_soft_dot.gradient = gradient
+		_soft_dot.fill = GradientTexture2D.FILL_RADIAL
+		_soft_dot.fill_from = Vector2(0.5, 0.5)
+		_soft_dot.fill_to = Vector2(1.0, 0.5)
+		_soft_dot.width = 64
+		_soft_dot.height = 64
+	return _soft_dot
+
+
 static func dot_mesh(size: float) -> QuadMesh:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(size, size)
 	var m := StandardMaterial3D.new()
+	m.albedo_texture = soft_dot_texture()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.vertex_color_use_as_albedo = true
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED

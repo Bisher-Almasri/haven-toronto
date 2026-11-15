@@ -41,6 +41,8 @@ var won := false
 
 var _time: Label
 var _kos: Label
+var _chain: Label
+var _chain_tween: Tween
 var _best: Label
 var _best_time := 0.0
 var _tier := -1
@@ -148,6 +150,18 @@ func _build_play_hud() -> void:
 	right.add_child(_muted)
 	add_child(_top_right)
 
+	_chain = ToyUI.label("", 44, ToyUI.GOLD)
+	_chain.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_chain.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_chain.offset_left = -200.0
+	_chain.offset_right = 200.0
+	_chain.offset_top = 84.0
+	_chain.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_chain.pivot_offset = Vector2(200.0, 24.0)
+	_chain.modulate.a = 0.0
+	_chain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_chain)
+
 	var hint_holder := CenterContainer.new()
 	hint_holder.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	hint_holder.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -169,7 +183,7 @@ func _build_play_hud() -> void:
 	rows.add_child(main)
 	main.add_child(ToyUI.key_hint(["A", "D"], "MOVE", 19))
 	main.add_child(ToyUI.key_hint(["SPACE"], "JUMP", 19))
-	main.add_child(ToyUI.key_hint(["SHIFT"], "HOLD: SPIKE BALL", 19))
+	main.add_child(ToyUI.key_hint(["SHIFT"], "HOLD: SPIKE BALL = ARMOR", 19))
 	var slam := HBoxContainer.new()
 	slam.alignment = BoxContainer.ALIGNMENT_CENTER
 	slam.add_theme_constant_override("separation", 34)
@@ -278,7 +292,7 @@ func _build_end() -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(row)
 	row.add_child(ToyUI.button("PLAY AGAIN", func() -> void: again_pressed.emit(), Vector2(230.0, 56.0), 24, "ENTER", true))
-	_other_level = ToyUI.button("", func() -> void: level_pressed.emit(3 - _level), Vector2(230.0, 56.0), 24, "N")
+	_other_level = ToyUI.button("", func() -> void: level_pressed.emit(ToyLevels.next_of(_level)), Vector2(230.0, 56.0), 24, "N")
 	row.add_child(_other_level)
 	row.add_child(ToyUI.button("TITLE", func() -> void: title_pressed.emit(), Vector2(160.0, 56.0), 24, "ESC"))
 	add_child(_end)
@@ -397,6 +411,21 @@ func set_progress(value: float) -> void:
 	_progress.queue_redraw()
 
 
+## "BOUNCE x3": pops on every bounce in a chain (from the second on) and fades when it ends.
+func set_chain(count: int) -> void:
+	if _chain_tween:
+		_chain_tween.kill()
+	if count < 2:
+		_chain_tween = create_tween()
+		_chain_tween.tween_property(_chain, "modulate:a", 0.0, 0.25)
+		return
+	_chain.text = "BOUNCE x%d" % count
+	_chain.modulate = Color.WHITE.lerp(ToyUI.HOT, minf((count - 2) / 6.0, 1.0))
+	_chain.scale = Vector2.ONE * 1.35
+	_chain_tween = create_tween()
+	_chain_tween.tween_property(_chain, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 func set_kos(count: int) -> void:
 	_kos.text = "KOS %d" % count
 
@@ -416,7 +445,7 @@ func _set_play_hud(on: bool) -> void:
 func set_level(level: int) -> void:
 	_level = level
 	_title.set_level(level)
-	_other_level.text = "NEXT LEVEL" if level == 1 else "LEVEL 1"
+	_other_level.text = "NEXT LEVEL" if level < ToyLevels.count else "LEVEL 1"
 	_refresh_tier(0.0, true)
 	_pause_level.text = ToyLevels.name_of(level)
 	for child in _pause_medals.get_children():
@@ -440,8 +469,8 @@ func show_title(scores: Array) -> void:
 	_title.visible = true
 
 
-func hide_title() -> void:
-	_set_play_hud(true)
+func hide_title(show_hud := true) -> void:
+	_set_play_hud(show_hud)
 	var tween := create_tween()
 	tween.tween_property(_title, "modulate:a", 0.0, 0.25)
 	tween.tween_callback(func() -> void: _title.visible = false)

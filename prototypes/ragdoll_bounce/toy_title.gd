@@ -130,41 +130,49 @@ class LevelCard extends PanelContainer:
 	func _init(level: int) -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		custom_minimum_size = Vector2(0.0, 78.0)
+		var compact := ToyLevels.count > 2
+		custom_minimum_size = Vector2(0.0, 0.0 if compact else 78.0)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(row)
-		var key := ToyUI.keycap(str(level), 26)
+		var key := ToyUI.keycap(str(level), 20 if compact else 26)
 		key.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(key)
 
-		var info := VBoxContainer.new()
-		info.add_theme_constant_override("separation", 2)
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(info)
-		info.add_child(ToyUI.label(ToyLevels.title_of(level), 30))
+		# many levels: one line per card (name, then the medal times) so the leaderboard keeps its room
+		var info: Container = row if compact else VBoxContainer.new()
+		if not compact:
+			info.add_theme_constant_override("separation", 2)
+			info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(info)
+		var name_label := ToyUI.label(ToyLevels.title_of(level), 22 if compact else 30)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		info.add_child(name_label)
 
 		var medals := HBoxContainer.new()
-		medals.add_theme_constant_override("separation", 16)
+		medals.add_theme_constant_override("separation", 12 if compact else 16)
+		medals.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		medals.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		info.add_child(medals)
 		for tier in [3, 2, 1]:
 			var group := HBoxContainer.new()
 			group.add_theme_constant_override("separation", 5)
 			group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			group.add_child(ToyUI.MedalDisc.new(18.0, tier))
-			var t := ToyUI.num(ToyScores.format_time(ToyMedals.tier_time(level, tier)), 18, ToyUI.tier_color(tier))
+			group.add_child(ToyUI.MedalDisc.new(13.0 if compact else 18.0, tier))
+			var t := ToyUI.num(ToyScores.format_time(ToyMedals.tier_time(level, tier)), 13 if compact else 18, ToyUI.tier_color(tier))
 			t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			group.add_child(t)
 			medals.add_child(group)
-		var tag := ToyUI.panel(Color(0.5, 0.26, 0.08, 0.9), ToyUI.INK, 10, Vector2(10.0, 0.0))
-		tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		tag.add_child(ToyUI.label(ToyLevels.LENGTHS.get(level, ""), 18, ToyUI.GOLD))
-		row.add_child(tag)
+		if not compact:
+			var tag := ToyUI.panel(Color(0.5, 0.26, 0.08, 0.9), ToyUI.INK, 10, Vector2(10.0, 0.0))
+			tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			tag.add_child(ToyUI.label(ToyLevels.LENGTHS.get(level, ""), 18, ToyUI.GOLD))
+			row.add_child(tag)
 		mouse_entered.connect(func() -> void:
 			_hover = true
 			_restyle())
@@ -183,7 +191,7 @@ class LevelCard extends PanelContainer:
 		if _hover and not selected:
 			bg = Color(0.3, 0.15, 0.06, 0.82)
 		var edge := ToyUI.GOLD if selected else (ToyUI.AMBER if _hover else Color(0.3, 0.16, 0.07))
-		add_theme_stylebox_override("panel", ToyUI.panel_style(bg, edge, 14, Vector2(14.0, 8.0)))
+		add_theme_stylebox_override("panel", ToyUI.panel_style(bg, edge, 12 if ToyLevels.count > 2 else 14, Vector2(14.0, 3.0 if ToyLevels.count > 2 else 8.0)))
 		modulate = Color.WHITE if selected or _hover else Color(0.82, 0.78, 0.74)
 
 
@@ -336,31 +344,32 @@ func _build_title_text(title_text: String) -> void:
 
 func _build_menu() -> void:
 	var box := VBoxContainer.new()
-	box.anchor_left = 0.55
+	var crowded := ToyLevels.count > 2
+	box.anchor_left = 0.49 if crowded else 0.55
 	box.anchor_right = 0.96
-	box.anchor_top = 0.285
+	box.anchor_top = 0.275 if crowded else 0.285
 	box.anchor_bottom = 0.84
 	box.alignment = BoxContainer.ALIGNMENT_BEGIN
-	box.add_theme_constant_override("separation", 10)
+	box.add_theme_constant_override("separation", 5 if crowded else 10)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
 
-	for n in [1, 2]:
+	for n in range(1, ToyLevels.count + 1):
 		var card := LevelCard.new(n)
 		card.chosen.connect(func() -> void: level_chosen.emit(n))
 		box.add_child(card)
 		_cards[n] = card
 
-	var panel := ToyUI.panel(Color(0.17, 0.08, 0.04, 0.82), ToyUI.WOOD_EDGE, 14, Vector2(16.0, 10.0))
+	var panel := ToyUI.panel(Color(0.17, 0.08, 0.04, 0.82), ToyUI.WOOD_EDGE, 14, Vector2(16.0, 5.0 if crowded else 10.0))
 	box.add_child(panel)
 	var inner := VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 4)
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(inner)
-	board_title = ToyUI.num("", 20, ToyUI.GOLD)
+	board_title = ToyUI.num("", 18 if crowded else 20, ToyUI.GOLD)
 	board_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner.add_child(board_title)
-	board = ToyUI.rich(22, true)
+	board = ToyUI.rich(18 if crowded else 22, true)
 	board.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	inner.add_child(board)
 	set_level(_level)
@@ -387,6 +396,9 @@ func _build_prompt() -> void:
 	keys.add_theme_constant_override("separation", 40)
 	keys.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(keys)
-	keys.add_child(ToyUI.key_hint(["1", "2"], "LEVEL", 16))
+	var level_keys: Array = []
+	for n in ToyLevels.count:
+		level_keys.append(str(n + 1))
+	keys.add_child(ToyUI.key_hint(level_keys, "LEVEL", 16))
 	keys.add_child(ToyUI.key_hint(["F"], "FULLSCREEN", 16))
 	keys.add_child(ToyUI.key_hint(["M"], "MUTE", 16))

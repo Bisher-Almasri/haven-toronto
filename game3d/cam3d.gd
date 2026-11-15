@@ -12,6 +12,11 @@ var bottom_limit := -24.0
 var top_limit := 15.0
 var zoom := 1.4
 var focus := Vector3.ZERO
+## Cutscene mode: the camera glides to cine_focus / cine_zoom instead of following the hog.
+var cine := false
+var cine_focus := Vector3.ZERO
+var cine_zoom := 1.4
+var cine_rate := 4.0
 
 var _trauma := 0.0
 
@@ -31,7 +36,24 @@ func snap() -> void:
 	_apply(0.0)
 
 
+## Aim the cutscene camera; snap jumps there at once instead of gliding.
+func cine_to(point: Vector3, new_zoom: float, rate := 4.0, snap_now := false) -> void:
+	cine = true
+	cine_focus = point
+	cine_zoom = new_zoom
+	cine_rate = rate
+	if snap_now:
+		focus = point
+		zoom = new_zoom
+		_apply(0.0)
+
+
 func _process(delta: float) -> void:
+	if cine:
+		zoom = lerpf(zoom, cine_zoom, 1.0 - exp(-2.5 * delta))
+		focus = focus.lerp(cine_focus, 1.0 - exp(-cine_rate * delta))
+		_apply(delta)
+		return
 	if target == null:
 		return
 	var speed := target.linear_velocity.length()

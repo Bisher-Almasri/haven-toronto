@@ -8,6 +8,7 @@ signal jumped
 signal launched
 signal respawned
 signal curl_changed(on: bool)
+signal chain_changed(count: int)
 
 # Same tuning as the 2D hedgehog, in metres (100 px = 1 m).
 const RADIUS := 0.28
@@ -21,12 +22,16 @@ const JUMP_SPEED := 8.8
 const JUMP_CUT := 0.45
 const ROLL_ACCEL := 70.0
 const ROLL_MAX := 24.0
-const BOUNCE_CURLED := 0.8
+const BOUNCE_CURLED := 0.88
 const BOUNCE_PLUSH := 0.3
 const PUMP_SPEED := 11.0
 const COYOTE_FRAMES := 6
 const BUFFER_FRAMES := 8
 const KO_TIME := 1.0
+const CHAIN_RESET_FRAMES := 27
+const CHAIN_BONUS := 0.05
+const CHAIN_BONUS_MAX := 5
+const CURLED_BOUNCE_BONUS := 0.12
 
 const TEX_STAND := preload("res://FINAL_GOOD_ingame_standing_1.png")
 const TEX_BLINK := preload("res://Final_good_igame_standing_2_blink.png")
@@ -47,6 +52,7 @@ var active := true
 var respawn_point := Vector3.ZERO
 var kos := 0
 var bounce_count := 0
+var chain := 0
 var facing := 1.0
 var last_ground_normal := Vector3.UP
 
@@ -55,6 +61,7 @@ var _pending_teleport: Variant = null
 var _pending_velocity := Vector3.ZERO
 var _jump_buffer_until := -1
 var _last_ground_frame := -1000
+var _ground_frames := 0
 var _can_cut := false
 var _jump_held := false
 var _dir := 0.0
@@ -169,6 +176,11 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if grounded:
 		_last_ground_frame = frame
 		_pump_ready = true
+		_ground_frames += 1
+		if _ground_frames > CHAIN_RESET_FRAMES:
+			_set_chain(0)
+	else:
+		_ground_frames = 0
 	if impact > 3.5:
 		_pulse = minf(impact / 25.0, 0.25)
 		if impact > 9.0:
@@ -254,13 +266,45 @@ func _drive(along: float, dir: float, accel: float, dt: float) -> float:
 	return move_toward(along, dir * RUN_SPEED, accel * boost * dt)
 
 
-func bounce_up(height: float) -> void:
+## A spike ball gets a bigger mushroom bounce than a plush hedgehog, and every bounce in a row
+## (no resting on the ground in between) throws it a little higher still.
+func bounce_bonus() -> float:
+	if not curled:
+		return 1.0
+	return 1.0 + CURLED_BOUNCE_BONUS + CHAIN_BONUS * minf(chain, CHAIN_BONUS_MAX)
+
+
+func bounce_up(height: float, bonus := 1.0) -> void:
 	var boost := 1.3 if Input.is_action_pressed("jump") and active else 1.0
-	linear_velocity.y = sqrt(2.0 * gravity() * height * boost)
+	linear_velocity.y = sqrt(2.0 * gravity() * height * boost * bonus)
 	_can_cut = false
-	_pulse = 0.25
+	_ground_frames = 0
+	_pulse = 0.25 + 0.03 * minf(chain, CHAIN_BONUS_MAX)
 	bounce_count += 1
+	_set_chain(chain + 1)
 	bounced.emit()
+
+
+## A spike ball that gets hit (by a boulder, say) rebounds off it instead of being hurt.
+func shove_back(from_pos: Vector3, strength: float) -> void:
+	var away := signf(global_position.x - from_pos.x)
+	if away == 0.0:
+		away = -facing
+	var push := clampf(strength, 4.0, 14.0)
+	linear_velocity = Vector3(away * push * 0.8, maxf(linear_velocity.y, 0.0) + push * 0.75, 0.0)
+	angular_velocity = Vector3(0.0, 0.0, -away * 14.0)
+	_ground_frames = 0
+	_pulse = 0.3
+	bounce_count += 1
+	_set_chain(chain + 1)
+	bounced.emit()
+
+
+func _set_chain(value: int) -> void:
+	if value == chain:
+		return
+	chain = value
+	chain_changed.emit(chain)
 
 
 ## target and apex_y are world metres (y up).
@@ -283,6 +327,7 @@ func knock_out(from_pos: Vector3) -> void:
 	ko = true
 	curled = false
 	kos += 1
+	_set_chain(0)
 	var away := signf(global_position.x - from_pos.x)
 	if away == 0.0:
 		away = -facing

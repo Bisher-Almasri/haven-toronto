@@ -1,7 +1,7 @@
 class_name ToyMedals
 
 # seconds to beat: [gold, silver, bronze]
-const TIMES := {1: [10.0, 13.0, 15.0], 2: [55.0, 60.0, 70.0]}
+const TIMES := {1: [10.0, 13.0, 15.0], 2: [55.0, 60.0, 70.0], 3: [30.0, 35.0, 42.0], 4: [30.0, 35.0, 42.0], 5: [55.0, 62.0, 75.0]}
 const NAMES := ["NO MEDAL", "BRONZE", "SILVER", "GOLD"]
 
 
