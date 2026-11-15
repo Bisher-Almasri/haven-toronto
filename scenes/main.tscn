@@ -1,0 +1,220 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="main"]
+[ext_resource type="Script" path="res://scripts/backdrop.gd" id="backdrop"]
+[ext_resource type="Script" path="res://scripts/decor.gd" id="decor"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="hud"]
+[ext_resource type="PackedScene" path="res://scenes/platform.tscn" id="platform"]
+[ext_resource type="PackedScene" path="res://scenes/bounce_root.tscn" id="bounce_root"]
+[ext_resource type="PackedScene" path="res://scenes/mushroom.tscn" id="mushroom"]
+[ext_resource type="PackedScene" path="res://scenes/beetle.tscn" id="beetle"]
+[ext_resource type="PackedScene" path="res://scenes/checkpoint.tscn" id="checkpoint"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="player"]
+[ext_resource type="Texture2D" path="res://overworld_bg.webp" id="bg"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("main")
+
+[node name="Backdrop" type="CanvasLayer" parent="."]
+layer = -20
+
+[node name="Draw" type="Node2D" parent="Backdrop"]
+script = ExtResource("backdrop")
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="SkyFill" type="Polygon2D" parent="World"]
+color = Color(0.93, 0.5, 0.1, 1)
+polygon = PackedVector2Array(-200, -1700, 2800, -1700, 2800, 0, -200, 0)
+
+[node name="SkyLeft" type="Sprite2D" parent="World"]
+modulate = Color(0.9, 0.82, 0.8, 1)
+position = Vector2(0, -720)
+texture = ExtResource("bg")
+centered = false
+
+[node name="SkyRight" type="Sprite2D" parent="World"]
+modulate = Color(0.9, 0.82, 0.8, 1)
+position = Vector2(1280, -720)
+texture = ExtResource("bg")
+centered = false
+flip_h = true
+
+[node name="Decor" type="Node2D" parent="World"]
+script = ExtResource("decor")
+
+[node name="Platforms" type="Node2D" parent="World"]
+
+[node name="WallLeft" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(-64, -1500)
+size = Vector2(64, 4600)
+kind = 1
+
+[node name="WallRight" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(2560, -1500)
+size = Vector2(64, 4600)
+kind = 1
+
+[node name="GroundLeft" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(-64, 0)
+size = Vector2(544, 128)
+kind = 2
+
+[node name="GroundMid" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(800, 0)
+size = Vector2(300, 128)
+kind = 2
+
+[node name="GroundBehindTrunk" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1100, 0)
+size = Vector2(600, 128)
+kind = 2
+
+[node name="GroundLanding" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(2100, 0)
+size = Vector2(524, 128)
+kind = 2
+
+[node name="Trunk" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1000, -1500)
+size = Vector2(100, 1500)
+kind = 3
+
+[node name="CaveFloor" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(0, 2800)
+size = Vector2(2560, 128)
+kind = 1
+
+[node name="ShaftExit" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1990, 2040)
+size = Vector2(210, 28)
+kind = 0
+
+[node name="A1" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1620, 1920)
+size = Vector2(256, 28)
+kind = 0
+
+[node name="A2" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1260, 1800)
+size = Vector2(256, 28)
+kind = 0
+
+[node name="A3" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(900, 1680)
+size = Vector2(384, 28)
+kind = 0
+
+[node name="B1" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1400, 1190)
+size = Vector2(256, 28)
+kind = 0
+
+[node name="B2" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1090, 1050)
+size = Vector2(320, 28)
+kind = 0
+
+[node name="B3" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(860, 930)
+size = Vector2(224, 28)
+kind = 0
+
+[node name="B4" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1200, 800)
+size = Vector2(256, 28)
+kind = 0
+
+[node name="B5" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1580, 680)
+size = Vector2(256, 28)
+kind = 0
+
+[node name="MasterLedge" parent="World/Platforms" instance=ExtResource("platform")]
+position = Vector2(1720, 430)
+size = Vector2(440, 28)
+kind = 0
+
+[node name="SpringRoots" type="Node2D" parent="World"]
+
+[node name="SpringWallLeft" parent="World/SpringRoots" instance=ExtResource("bounce_root")]
+position = Vector2(2200, 2090)
+size = Vector2(28, 510)
+kick_side = 1
+
+[node name="SpringWallRight" parent="World/SpringRoots" instance=ExtResource("bounce_root")]
+position = Vector2(2532, 2100)
+size = Vector2(28, 700)
+kick_side = 0
+
+[node name="Checkpoints" type="Node2D" parent="World"]
+
+[node name="CheckpointCave" parent="World/Checkpoints" instance=ExtResource("checkpoint")]
+position = Vector2(700, 2800)
+
+[node name="CheckpointExit" parent="World/Checkpoints" instance=ExtResource("checkpoint")]
+position = Vector2(2095, 2040)
+
+[node name="CheckpointB1" parent="World/Checkpoints" instance=ExtResource("checkpoint")]
+position = Vector2(1530, 1190)
+
+[node name="CheckpointB4" parent="World/Checkpoints" instance=ExtResource("checkpoint")]
+position = Vector2(1420, 800)
+
+[node name="CheckpointMaster" parent="World/Checkpoints" instance=ExtResource("checkpoint")]
+position = Vector2(1790, 430)
+
+[node name="Mushrooms" type="Node2D" parent="World"]
+
+[node name="MushroomA" parent="World/Mushrooms" instance=ExtResource("mushroom")]
+position = Vector2(1180, 1680)
+cap_width = 128.0
+bounce_height = 460.0
+
+[node name="MushroomB" parent="World/Mushrooms" instance=ExtResource("mushroom")]
+position = Vector2(1770, 680)
+cap_width = 112.0
+bounce_height = 330.0
+
+[node name="MasterMushroom" parent="World/Mushrooms" instance=ExtResource("mushroom")]
+position = Vector2(1960, 430)
+cap_width = 200.0
+master = true
+launch_apex_y = -420.0
+landing_position = Vector2(2260.0, 0.0)
+
+[node name="Enemies" type="Node2D" parent="World"]
+
+[node name="BeetleFloorA" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(1250, 2800)
+patrol_range = 160.0
+
+[node name="BeetleFloorB" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(1800, 2800)
+patrol_range = 150.0
+
+[node name="BeetleA2" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(1388, 1800)
+patrol_range = 70.0
+
+[node name="BeetleA3" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(1000, 1680)
+patrol_range = 60.0
+
+[node name="BeetleB2" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(1250, 1050)
+patrol_range = 90.0
+
+[node name="BeetleB3" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(972, 930)
+patrol_range = 55.0
+
+[node name="BeetleB5" parent="World/Enemies" instance=ExtResource("beetle")]
+position = Vector2(1630, 680)
+patrol_range = 40.0
+
+[node name="Player" parent="World" instance=ExtResource("player")]
+position = Vector2(140, 0)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("hud")
